@@ -117,42 +117,48 @@ export class WidgetImagePipeline {
     const topStrip = auto(STRIP_BASE, STRIP_EXP, TARGET_SIZE);
     const radius = auto(RADIUS_BASE, RADIUS_EXP, TARGET_SIZE);
 
-    const base = await sharp(inputPath)
+    // Sharp's composite/joinChannel path can fail on some Spotify/Discord CDN
+    // inputs with "images do not have same numbers of bands". Do the same
+    // operation as Discord-Lyrically-Widget manually on a raw RGBA buffer:
+    // resize to 512x512, paste it lower on a transparent canvas, clip the
+    // bottom overflow, then zero alpha outside the top-right quarter circle.
+    const { data: cover } = await sharp(inputPath)
       .rotate()
-      // Match Discord-Lyrically-Widget exactly: resize to 512×512, then shift down.
       .resize(TARGET_SIZE, TARGET_SIZE, { fit: "fill" })
       .ensureAlpha()
-      .png()
-      .toBuffer();
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
-    const alpha = Buffer.alloc(TARGET_SIZE * TARGET_SIZE, 255);
-    // Transparent title strip.
-    for (let y = 0; y < Math.min(topStrip, TARGET_SIZE); y += 1) {
-      alpha.fill(0, y * TARGET_SIZE, (y + 1) * TARGET_SIZE);
+    const canvas = Buffer.alloc(TARGET_SIZE * TARGET_SIZE * 4, 0);
+
+    for (let y = 0; y < TARGET_SIZE; y += 1) {
+      const dstY = y + topStrip;
+      if (dstY >= TARGET_SIZE) break;
+      const srcStart = y * TARGET_SIZE * 4;
+      const srcEnd = srcStart + TARGET_SIZE * 4;
+      const dstStart = dstY * TARGET_SIZE * 4;
+      cover.copy(canvas, dstStart, srcStart, srcEnd);
     }
-    // Rounded top-right corner: clear the corner box, then keep the quarter circle.
-    const cx = TARGET_SIZE - radius;
-    const cy = topStrip + radius;
-    for (let y = topStrip; y < Math.min(topStrip + radius, TARGET_SIZE); y += 1) {
-      for (let x = Math.max(TARGET_SIZE - radius, 0); x < TARGET_SIZE; x += 1) {
-        const insideCircle = (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2;
-        if (!insideCircle) alpha[y * TARGET_SIZE + x] = 0;
+
+    const safeRadius = Math.min(radius, TARGET_SIZE, Math.max(TARGET_SIZE - topStrip, 0));
+    if (safeRadius > 0) {
+      const cx = TARGET_SIZE - safeRadius;
+      const cy = topStrip + safeRadius;
+      for (let y = topStrip; y < Math.min(topStrip + safeRadius, TARGET_SIZE); y += 1) {
+        for (let x = Math.max(TARGET_SIZE - safeRadius, 0); x < TARGET_SIZE; x += 1) {
+          const insideCircle = (x - cx) ** 2 + (y - cy) ** 2 <= safeRadius ** 2;
+          if (!insideCircle) canvas[(y * TARGET_SIZE + x) * 4 + 3] = 0;
+        }
       }
     }
 
-    await sharp({
-      create: {
+    await sharp(canvas, {
+      raw: {
         width: TARGET_SIZE,
         height: TARGET_SIZE,
         channels: 4,
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
       },
     })
-      .composite([{ input: base, left: 0, top: topStrip }])
-      .removeAlpha()
-      .joinChannel(alpha, {
-        raw: { width: TARGET_SIZE, height: TARGET_SIZE, channels: 1 },
-      })
       .png({ compressionLevel: 9 })
       .toFile(outputPath);
   }
