@@ -7,6 +7,7 @@ import type {
   WidgetPayload,
   WidgetSnapshot,
 } from "./types";
+import { WidgetImagePipeline } from "./imagePipeline";
 import { recordWidgetUpdate } from "./runtimeStatus";
 import {
   DEFAULT_TEXT_MAX,
@@ -115,10 +116,12 @@ export function buildWidgetPayload(snapshot: WidgetSnapshot): WidgetPayload {
 
 export class WidgetUpdater {
   private lastPayloadJson: string | null = null;
+  private readonly imagePipeline = new WidgetImagePipeline();
 
   /** PATCH the widget only when the payload differs from the last successful send. */
   async update(snapshot: WidgetSnapshot): Promise<boolean> {
-    const payload = buildWidgetPayload(snapshot);
+    const preparedSnapshot = await this.prepareSnapshot(snapshot);
+    const payload = buildWidgetPayload(preparedSnapshot);
     const serialized = stableStringify(payload);
 
     if (this.lastPayloadJson === serialized) {
@@ -133,6 +136,22 @@ export class WidgetUpdater {
       this.lastPayloadJson = serialized;
     }
     return ok;
+  }
+
+  private async prepareSnapshot(snapshot: WidgetSnapshot): Promise<WidgetSnapshot> {
+    const track = snapshot.track;
+    if (!track?.heroImageUrl) return snapshot;
+
+    const correctedHeroImage = await this.imagePipeline.prepareHeroImage(track.heroImageUrl);
+    if (correctedHeroImage === track.heroImageUrl) return snapshot;
+
+    return {
+      ...snapshot,
+      track: {
+        ...track,
+        heroImageUrl: correctedHeroImage,
+      },
+    };
   }
 
   private async patch(payload: WidgetPayload): Promise<boolean> {

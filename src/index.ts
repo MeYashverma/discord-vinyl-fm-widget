@@ -182,6 +182,11 @@ function spotifySyncId(presence: Presence | null | undefined): string | null {
 
 async function runPollLoop(client: Client, updater: WidgetUpdater): Promise<void> {
   const intervalMs = config.pollSeconds * 1000;
+  const stopAt =
+    config.maxRuntimeSeconds > 0
+      ? Date.now() + config.maxRuntimeSeconds * 1000
+      : null;
+
   logger.info("Starting poll loop", {
     pollSeconds: config.pollSeconds,
     topsPollSeconds: config.topsPollSeconds,
@@ -191,6 +196,7 @@ async function runPollLoop(client: Client, updater: WidgetUpdater): Promise<void
     nowPlaying: "discord-spotify-presence",
     tops: "stats.fm",
     profile: config.statsmProfileUrl,
+    maxRuntimeSeconds: config.maxRuntimeSeconds,
   });
 
   await getRotationData(true);
@@ -225,6 +231,11 @@ async function runPollLoop(client: Client, updater: WidgetUpdater): Promise<void
   });
 
   for (;;) {
+    if (stopAt !== null && Date.now() >= stopAt) {
+      logger.info("Max runtime reached; exiting poll loop");
+      return;
+    }
+
     const started = Date.now();
     try {
       await pollOnce(client, updater);
@@ -235,8 +246,16 @@ async function runPollLoop(client: Client, updater: WidgetUpdater): Promise<void
     }
 
     const elapsed = Date.now() - started;
-    const waitMs = Math.max(0, intervalMs - elapsed);
-    await sleep(waitMs);
+    const baseWaitMs = Math.max(0, intervalMs - elapsed);
+    const remainingRuntimeMs =
+      stopAt === null ? Number.POSITIVE_INFINITY : stopAt - Date.now();
+
+    if (remainingRuntimeMs <= 0) {
+      logger.info("Max runtime reached; exiting poll loop");
+      return;
+    }
+
+    await sleep(Math.min(baseWaitMs, remainingRuntimeMs));
   }
 }
 
@@ -288,6 +307,7 @@ async function main(): Promise<void> {
   }
 
   await runPollLoop(client, updater);
+  await shutdown("max runtime reached");
 }
 
 main().catch((error: unknown) => {

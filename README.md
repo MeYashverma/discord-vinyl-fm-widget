@@ -41,6 +41,7 @@ Edit `.env` in the project root with your values:
 | `DISCORD_APP_ID` | Your Discord application ID |
 | `DISCORD_USER_ID` | Your Discord user ID (the account whose widget gets updated) |
 | `STATSM_USERNAME` | Your stats.fm username |
+| `DISCORD_TARGET_CHANNEL_ID` | Optional channel where corrected album art is uploaded |
 
 All other options are in `.env.example` with safe defaults.
 
@@ -52,8 +53,9 @@ All other options are in `.env.example` with safe defaults.
 2. Add a bot and copy the token into `.env`
 3. Enable **Presence Intent** and **Server Members Intent** under Bot settings
 4. Invite the bot to a server you are in
-5. Authorize the app once with the `sdk.social_layer` OAuth scope (required for widget PATCH)
-6. Configure your profile widget in Discord — see **[Widget setup guide](docs/widget-setup.md)**
+5. Optional but recommended for album-art correction: create/use a channel where the bot can send messages/files and set `DISCORD_TARGET_CHANNEL_ID`
+6. Authorize the app once with the `sdk.social_layer` OAuth scope (required for widget PATCH)
+7. Configure your profile widget in Discord — see **[Widget setup guide](docs/widget-setup.md)**
 
 ### Run
 
@@ -71,6 +73,19 @@ npm start
 The hardest part is binding fields in the Discord widget editor. Every field the bot updates must be set to **User Data** with the matching **Data Field** name.
 
 See the full guide: **[docs/widget-setup.md](docs/widget-setup.md)**
+
+
+## Album-art image correction
+
+Like the LaunchPad widget, album art can run through a D.W.I.F-style correction pipeline before it is sent to Discord:
+
+1. Download the current Spotify album art.
+2. Center-crop and resize it to a 512×512 square PNG.
+3. Add the transparent top strip and rounded top-right corner Discord's widget image frame expects.
+4. Upload the corrected PNG to a Discord channel.
+5. Send the resulting `cdn.discordapp.com` attachment URL as `hero_image`.
+
+Set `DISCORD_TARGET_CHANNEL_ID` as a repository secret/local env value to enable the upload step. The bot needs permission to send messages and attach files in that channel. If the channel is not configured, the bot falls back to the direct album art URL.
 
 ## Rotating stat pages
 
@@ -122,12 +137,13 @@ Add these **Repository secrets** in **Settings → Secrets and variables → Act
 | `DISCORD_USER_ID` | Your Discord user ID |
 | `DISCORD_BOT_TOKEN` | Discord Developer Portal → Bot token |
 | `STATSM_USERNAME` | Your stats.fm username |
+| `DISCORD_TARGET_CHANNEL_ID` | Optional channel where corrected album art is uploaded |
 
 Then open **Actions → Update stats.fm Discord Widget → Run workflow**.
 
 The workflow also runs every 6 hours as a safety net. It sets `MAX_RUNTIME_SECONDS=21000` by default so the daemon exits cleanly before GitHub's 6-hour job limit and queues the next run.
 
-Optional settings can be added as **Repository variables**: `POLL_SECONDS`, `TOPS_POLL_SECONDS`, `ROTATING_STATS`, `ROTATION_INTERVAL_SECONDS`, `COMMANDS_GLOBAL`, `COMMANDS_GUILD_ID`, `STATSM_PROFILE_URL`, `IDLE_IMAGE_URL`, and `MAX_RUNTIME_SECONDS`.
+Optional settings can be added as **Repository variables**: `POLL_SECONDS`, `TOPS_POLL_SECONDS`, `ROTATING_STATS`, `ROTATION_INTERVAL_SECONDS`, `COMMANDS_GLOBAL`, `COMMANDS_GUILD_ID`, `STATSM_PROFILE_URL`, `IDLE_IMAGE_URL`, `WIDGET_IMAGE_FIX`, `IMAGE_CACHE_DIR`, and `MAX_RUNTIME_SECONDS`.
 
 ### VPS / local process manager
 

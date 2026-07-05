@@ -46,6 +46,9 @@ jobs:
           DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           STATSM_USERNAME: ${{ secrets.STATSM_USERNAME }}
+          # Optional: channel the bot can send messages to. Required for the
+          # D.W.I.F image correction pipeline to upload album art to Discord CDN.
+          DISCORD_TARGET_CHANNEL_ID: ${{ secrets.DISCORD_TARGET_CHANNEL_ID }}
 
           # Optional repository variables (Settings → Secrets and variables → Actions → Variables)
           STATSM_PROFILE_URL: ${{ vars.STATSM_PROFILE_URL }}
@@ -58,6 +61,8 @@ jobs:
           COMMANDS_GLOBAL: ${{ vars.COMMANDS_GLOBAL || 'false' }}
           COMMANDS_GUILD_ID: ${{ vars.COMMANDS_GUILD_ID }}
           MAX_RUNTIME_SECONDS: ${{ vars.MAX_RUNTIME_SECONDS || '21000' }}
+          WIDGET_IMAGE_FIX: ${{ vars.WIDGET_IMAGE_FIX || 'true' }}
+          IMAGE_CACHE_DIR: ${{ vars.IMAGE_CACHE_DIR || '.cache/images' }}
         run: npm start
 
       - name: Trigger next run

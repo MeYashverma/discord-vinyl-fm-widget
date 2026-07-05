@@ -44,6 +44,11 @@ export function fitAlbumCoverUrl(url: string): string {
   const source = shortenAlbumSourceUrl(url);
   if (!source) return "";
 
+  // Corrected images uploaded by the D.W.I.F pipeline should be sent directly.
+  if (/^https:\/\/(cdn|media)\.discordapp\.(com|net)\/attachments\//i.test(source)) {
+    return source;
+  }
+
   // Apple / iTunes: …/768x768bb.jpg → …/480x360bb.jpg
   const appleSized = source.replace(
     /\/\d+x\d+([a-z]*)\.(jpg|jpeg|png|webp)(\?.*)?$/i,
