@@ -27,9 +27,10 @@ Single-user Discord bot that keeps your custom **Profile Widget** in sync with l
 ## Quick start
 
 ```bash
-git clone https://github.com/akahobby/stats.fm-widget
-cd stats.fm-widget
+git clone https://github.com/MeYashverma/discord-stats.fm-widget.git
+cd discord-stats.fm-widget
 npm install
+cp .env.example .env
 ```
 
 Edit `.env` in the project root with your values:
@@ -41,7 +42,9 @@ Edit `.env` in the project root with your values:
 | `DISCORD_USER_ID` | Your Discord user ID (the account whose widget gets updated) |
 | `STATSM_USERNAME` | Your stats.fm username |
 
-All other options are in `.env` with defaults already set.
+All other options are in `.env.example` with safe defaults.
+
+> If you run `npm start` without these values, the app will stop with `Invalid configuration`. That is expected locally. In GitHub Actions, repository secrets must be mapped into the workflow `env:` block.
 
 ### Discord setup
 
@@ -107,7 +110,28 @@ COMMANDS_GLOBAL=true   # switch to global commands (slow to propagate)
 
 ## Hosting
 
-For 24/7 uptime, run on a VPS or cloud host with a process manager like `pm2`:
+### GitHub Actions
+
+This repo includes `.github/workflows/update.yml`, which runs the widget as a long-lived GitHub Actions daemon.
+
+Add these **Repository secrets** in **Settings → Secrets and variables → Actions → Secrets**:
+
+| Secret | Description |
+| --- | --- |
+| `DISCORD_APP_ID` | Discord Developer Portal → Application ID |
+| `DISCORD_USER_ID` | Your Discord user ID |
+| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Bot token |
+| `STATSM_USERNAME` | Your stats.fm username |
+
+Then open **Actions → Update stats.fm Discord Widget → Run workflow**.
+
+The workflow also runs every 6 hours as a safety net. It sets `MAX_RUNTIME_SECONDS=21000` by default so the daemon exits cleanly before GitHub's 6-hour job limit and queues the next run.
+
+Optional settings can be added as **Repository variables**: `POLL_SECONDS`, `TOPS_POLL_SECONDS`, `ROTATING_STATS`, `ROTATION_INTERVAL_SECONDS`, `COMMANDS_GLOBAL`, `COMMANDS_GUILD_ID`, `STATSM_PROFILE_URL`, `IDLE_IMAGE_URL`, and `MAX_RUNTIME_SECONDS`.
+
+### VPS / local process manager
+
+For VPS uptime, run with a process manager like `pm2`:
 
 ```bash
 npm run build

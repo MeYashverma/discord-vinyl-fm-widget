@@ -1,0 +1,73 @@
+name: Update stats.fm Discord Widget
+
+# Long-lived daemon for the Discord profile widget.
+# The app exits before GitHub Actions' 6-hour hard limit, then this workflow
+# queues the next run so the widget keeps updating without a VPS.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Safety net in case the self-dispatch step fails.
+    - cron: "0 */6 * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+# Prevent two runners from PATCHing the same Discord widget at the same time.
+concurrency:
+  group: statsfm-widget-daemon
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run widget daemon
+        env:
+          DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          STATSM_USERNAME: ${{ secrets.STATSM_USERNAME }}
+
+          # Optional repository variables (Settings → Secrets and variables → Actions → Variables)
+          STATSM_PROFILE_URL: ${{ vars.STATSM_PROFILE_URL }}
+          IDLE_IMAGE_URL: ${{ vars.IDLE_IMAGE_URL }}
+          POLL_SECONDS: ${{ vars.POLL_SECONDS || '5' }}
+          TOPS_POLL_SECONDS: ${{ vars.TOPS_POLL_SECONDS || '60' }}
+          CURRENT_TRACK_WINDOW_SECONDS: ${{ vars.CURRENT_TRACK_WINDOW_SECONDS || '300' }}
+          ROTATING_STATS: ${{ vars.ROTATING_STATS || 'true' }}
+          ROTATION_INTERVAL_SECONDS: ${{ vars.ROTATION_INTERVAL_SECONDS || '30' }}
+          COMMANDS_GLOBAL: ${{ vars.COMMANDS_GLOBAL || 'false' }}
+          COMMANDS_GUILD_ID: ${{ vars.COMMANDS_GUILD_ID }}
+          MAX_RUNTIME_SECONDS: ${{ vars.MAX_RUNTIME_SECONDS || '21000' }}
+        run: npm start
+
+      - name: Trigger next run
+        if: success()
+        run: |
+          echo "Triggering next workflow run..."
+          curl -sS -f -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/update.yml/dispatches \
+            -d '{"ref":"${{ github.ref_name }}"}'
+          echo "Next run queued."
