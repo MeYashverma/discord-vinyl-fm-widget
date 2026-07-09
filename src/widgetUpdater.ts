@@ -7,12 +7,14 @@ import type {
   WidgetPayload,
   WidgetSnapshot,
 } from "./types";
+import { resolveAlbumArt } from "./albumArtFailover";
 import { WidgetImagePipeline } from "./imagePipeline";
 import { recordWidgetUpdate } from "./runtimeStatus";
 import {
   DEFAULT_TEXT_MAX,
   IMAGE_URL_MAX,
   fitAlbumCoverUrl,
+  isMissingOrPlaceholderArt,
   logger,
   retryAfterMs,
   sleep,
@@ -142,9 +144,22 @@ export class WidgetUpdater {
 
   private async prepareSnapshot(snapshot: WidgetSnapshot): Promise<WidgetSnapshot> {
     const track = snapshot.track;
-    if (!track?.heroImageUrl) return snapshot;
+    // Idle has no track at all -- heroImageUrl intentionally stays empty so
+    // Discord shows the editor's Application Asset fallback (animated gif).
+    // Only tracks that are actually playing get the art failover below.
+    if (!track) return snapshot;
 
-    const correctedHeroImage = await this.imagePipeline.prepareHeroImage(track.heroImageUrl);
+    // The now-playing source itself may hand back no art (or, in Last.fm's
+    // case specifically, a generic placeholder image that looks like a
+    // valid URL but isn't real album art -- see isMissingOrPlaceholderArt).
+    // Fill that in with iTunes / a static default BEFORE the optional
+    // D.W.I.F shape-fix runs, so the fix applies to fallback art too, not
+    // just art that happened to come from the now-playing source directly.
+    const filledInArt = isMissingOrPlaceholderArt(track.heroImageUrl)
+      ? await resolveAlbumArt(track.heroImageUrl, track.artist, track.title)
+      : track.heroImageUrl;
+
+    const correctedHeroImage = await this.imagePipeline.prepareHeroImage(filledInArt);
     if (correctedHeroImage === track.heroImageUrl) return snapshot;
 
     return {
