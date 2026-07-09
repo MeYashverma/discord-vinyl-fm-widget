@@ -7,6 +7,25 @@ export const IMAGE_URL_MAX = 512;
 export const HERO_IMAGE_WIDTH = 480;
 export const HERO_IMAGE_HEIGHT = 360;
 
+/**
+ * Last.fm's own well-known "no real cover" placeholder (a generic gray
+ * "sheriff star" image). When a track genuinely has no album art, Last.fm's
+ * API does not return an empty string -- it returns various sizes of this
+ * exact same image hash, which looks like a valid URL but is not real art.
+ * Widely documented (other projects such as Navidrome special-case the same
+ * hash for artist images). Any URL containing it should be treated the same
+ * as no art at all, or every track missing a cover shows this one gray
+ * placeholder image instead of falling back to something better.
+ */
+const LASTFM_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
+
+/** True if `url` is empty/blank or is Last.fm's generic no-cover placeholder. */
+export function isMissingOrPlaceholderArt(url: string | null | undefined): boolean {
+  const trimmed = url?.trim();
+  if (!trimmed) return true;
+  return trimmed.includes(LASTFM_PLACEHOLDER_HASH);
+}
+
 export type AlbumImageSet = {
   highRes?: string | null;
   medium?: string | null;
